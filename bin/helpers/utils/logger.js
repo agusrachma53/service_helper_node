@@ -1,75 +1,70 @@
 const winston = require('winston');
-const morgan  = require('morgan');
-require('winston-logstash');
-const config = require('../../infra/configs/global_config');
+const config = winston.config;
+const sentryLog = require('../components/sentry/sentry_log');
+const st = require('stack-trace');
 
-let logger = new winston.Logger({
-  transports: [
-    new winston.transports.Console({
-      level: 'info',
-      handleExceptions: true,
-      json: false,
-      colorize: true,
-    }),
-    new winston.transports.Logstash(config.get('/logstash'))
+const myconfig = {
+  levels: {
+    trace: 9,
+    input: 8,
+    verbose: 7,
+    prompt: 6,
+    debug: 5,
+    info: 4,
+    data: 3,
+    help: 2,
+    warn: 1,
+    error: 0,
+  },
+  colors: {
+    error: 'red',
+    debug: 'blue',
+    warn: 'yellow',
+    data: 'grey',
+    info: 'green',
+    verbose: 'cyan',
+    silly: 'magenta'
+  }
+};
+const logger = new (winston.Logger)({
+  // thanks to https://github.com/winstonjs/winston/issues/1135
+  transports: [ new winston.transports.Console({
+    level: 'info',
+    handleExceptions: true,
+    json: false,
+    colorize: true,
+    timestamp: function() {
+      const currentDateTime = new Date();
+      const date = currentDateTime.getDate();
+      const month = (currentDateTime.getMonth() + 1);
+      const year = currentDateTime.getFullYear();
+      const hours = currentDateTime.getHours();
+      const minutes = currentDateTime.getMinutes();
+      const seconds = currentDateTime.getSeconds();
+      const dateString = year + '-' + month + '-' + date + ' ' + hours + ':' + minutes + ':' + seconds;
+      return dateString;
+    },
+    formatter: function(options) {
+      return options.timestamp() + ' [' + config.colorize(options.level, options.level.toLowerCase()) + ']: ' + options.message;
+    }
+  }),
   ],
+  levels: myconfig.levels,
   exitOnError: false
 });
 
 const log = (context, message, scope) => {
-  const obj = {
-    context,
-    scope,
-    message: message.toString()
-  };
-  logger.info(obj);
-};
-
-const info = (context, message, scope, meta) => {
-  const obj = {
-    context,
-    scope,
-    message: message,
-    meta
-  };
-  logger.info(obj);
-};
-
-const error = (context, message, scope, meta) => {
-  const obj = {
-    context,
-    scope,
-    message: message,
-    meta
-  };
-  logger.error(obj);
-};
-
-const init = () => {
-  return morgan((tokens, req, res) => {
-    const logData = {
-      method: tokens.method(req, res),
-      url: tokens.url(req, res),
-      code: tokens.status(req, res),
-      contentLength: tokens.res(req, res, 'content-length'),
-      responseTime: `${tokens['response-time'](req, res, '0')}`, // in milisecond (ms)
-      date: tokens.date(req, res, 'iso'),
-      ip: tokens['remote-addr'](req,res)
-    };
-    const obj = {
-      context: 'service-info',
-      scope: 'audit-log',
-      message: 'Logging service...',
-      meta: logData
-    };
-    logger.info(obj);
-    return;
-  });
+  const msg = `(${context}) - ${message} 
+  => [${st.get()[1].getFileName()}:${ st.get()[1].getLineNumber()}]`;
+  if (scope === 'error') {
+    logger.error(msg);
+    const msgSentry = `(${context}) - ${message}`;
+    sentryLog.sendError(msgSentry);
+  } else {
+    logger.info(msg);
+  }
 };
 
 module.exports = {
-  log,
-  init,
-  info,
-  error
+  log
 };

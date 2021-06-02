@@ -5,6 +5,7 @@ const basicAuth = require('../auth/basic_auth_helper');
 const jwtAuth = require('../auth/jwt_auth_helper');
 const wrapper = require('../helpers/utils/wrapper');
 const userHandler = require('../modules/user/handlers/api_handler');
+const generalHandler = require('../modules/general/handlers/api_handlers');
 const mongoConnectionPooling = require('../helpers/databases/mongodb/connection');
 
 function AppServer() {
@@ -43,6 +44,10 @@ function AppServer() {
   this.server.post('/users/v1/login', basicAuth.isAuthenticated, userHandler.postDataLogin);
   this.server.get('/users/v1/profile', jwtAuth.verifyToken, userHandler.getUser);
   this.server.post('/users/v1/register', basicAuth.isAuthenticated, userHandler.registerUser);
+
+
+  // Eksport Data MongoDB to Excel , Exp (Partnership)
+  this.server.get('/general/v1/exportDataMongoDBToExcel',basicAuth.isAuthenticated,generalHandler.exportDataMongoDBToExcel);
 
   //Initiation
   mongoConnectionPooling.init();
